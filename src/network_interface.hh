@@ -4,12 +4,15 @@
 #include "ethernet_frame.hh"
 #include "ipv4_datagram.hh"
 
+#include <map>
 #include <iostream>
 #include <list>
 #include <optional>
 #include <queue>
 #include <unordered_map>
 #include <utility>
+#include <tuple>
+
 
 // A "network interface" that connects IP (the internet layer, or network layer)
 // with Ethernet (the network access layer, or link layer).
@@ -32,16 +35,46 @@
 // the network interface passes it up the stack. If it's an ARP
 // request or reply, the network interface processes the frame
 // and learns or replies as necessary.
+
+struct TimedEvent {
+
+  // when even occurs
+  size_t time;
+
+  EthernetFrame message;
+
+  // the ip address of the target
+  u_int32_t target_addr;
+  
+} ;
+
 class NetworkInterface
 {
 private:
   // Ethernet (known as hardware, network-access, or link-layer) address of the interface
   EthernetAddress ethernet_address_;
-
+  
   // IP (known as Internet-layer or network-layer) address of the interface
   Address ip_address_;
 
+  // the arp table that stores MAC addresses correspond to IP addresses
+  std::map<std::string, std::pair<EthernetAddress, size_t>> arp_table = 
+  std::map<std::string, std::pair<EthernetAddress, size_t>>(); 
+
+  // read-to-be-sent queue
+  std::queue<EthernetFrame> ready_queue = std::queue<EthernetFrame>();
+
+  // waiting queue
+  std::queue<TimedEvent> waiting_queue = std::queue<TimedEvent>();
+
+  // request table that stores the last time that send the ARP request
+  std::map<std::string, size_t> request_table = 
+  std::map<std::string, size_t>();
+
+  
+
 public:
+
   // Construct a network interface with given Ethernet (network-access-layer) and IP (internet-layer)
   // addresses
   NetworkInterface( const EthernetAddress& ethernet_address, const Address& ip_address );
@@ -64,4 +97,14 @@ public:
 
   // Called periodically when time elapses
   void tick( size_t ms_since_last_tick );
+
+
+  // check the caches ARP table whether we know the MAC address
+  bool arp_table_lookup( const std::string ip_address );
+
+  // check the request table to see when was the last time sending the ARP request
+  bool request_table_lookup( const std::string ip_address );
+
+  // helper function, create the request frame and fill in the correct information
+  EthernetFrame create_request_frame( const Address& next_hop );
 };
